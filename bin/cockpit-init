@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+# cockpit-init — 一键搭建双 AI 协作骨架
+# 来源：~/.claude/skills/cockpit-coop
+#
+# 用法：
+#   cd /path/to/project
+#   ~/.claude/skills/cockpit-coop/bin/cockpit-init [tmux-session-name]
+#
+# 默认 tmux session 名 = 当前目录名小写
+
+set -euo pipefail
+
+SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TEMPLATES="$SKILL_DIR/templates"
+PROJECT_DIR="$(pwd)"
+SESSION_NAME="${1:-$(basename "$PROJECT_DIR" | tr '[:upper:]' '[:lower:]')}"
+
+# 颜色
+GREEN=$'\033[32m'
+YELLOW=$'\033[33m'
+RED=$'\033[31m'
+DIM=$'\033[2m'
+RESET=$'\033[0m'
+
+ok() { echo "${GREEN}✓${RESET} $*"; }
+warn() { echo "${YELLOW}⚠${RESET} $*"; }
+err() { echo "${RED}✗${RESET} $*" >&2; }
+info() { echo "${DIM}→${RESET} $*"; }
+
+echo
+echo "🚁 cockpit-init — 双 AI 协作骨架"
+echo "   project: $PROJECT_DIR"
+echo "   tmux session: $SESSION_NAME"
+echo
+
+# 1. 必须在 git 仓库
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+  err "当前目录不是 git 仓库。先 git init 再来。"
+  exit 1
+fi
+ok "git 仓库检测通过"
+
+# 2. cockpit/ 已存在就警告
+if [[ -d cockpit ]]; then
+  warn "cockpit/ 已存在。"
+  read -p "覆盖现有文件？(y/N) " -n 1 -r
+  echo
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    info "已取消，未改任何文件。"
+    exit 0
+  fi
+fi
+
+# 3. 拷模板
+mkdir -p cockpit
+cp "$TEMPLATES"/*.md cockpit/
+ok "模板拷到 cockpit/ ($(ls cockpit/ | wc -l | tr -d ' ') 份文件)"
+
+# 4. CLAUDE.md / AGENTS.md 加协议指针（如果文件存在）
+POINTER="> 🤝 **双 AI 协作模式**：本项目用 Claude × Codex 协作，先看 \`cockpit/COORDINATION.md\` 了解协议。状态以 \`cockpit/NOW.md\` 为准。"
+
+add_pointer() {
+  local file="$1"
+  if [[ ! -f "$file" ]]; then
+    return
+  fi
+  if grep -q "cockpit/COORDINATION" "$file" 2>/dev/null; then
+    info "$file 已含协议指针，跳过"
+    return
+  fi
+  # 在文件开头第一个 # 标题之后插入
+  if head -1 "$file" | grep -q "^#"; then
+    # 用临时文件实现 in-place 插入
+    awk -v pointer="$POINTER" '
+      NR==1 { print; print ""; print pointer; print ""; next }
+      { print }
+    ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+  else
+    # 没有标题就直接 prepend
+    { echo "$POINTER"; echo; cat "$file"; } > "$file.tmp" && mv "$file.tmp" "$file"
+  fi
+  ok "$file 加了协议指针"
+}
+
+add_pointer "CLAUDE.md"
+add_pointer "AGENTS.md"
+
+# CLAUDE.md 不存在也提醒一下
+if [[ ! -f CLAUDE.md && ! -f AGENTS.md ]]; then
+  warn "项目根目录没有 CLAUDE.md / AGENTS.md，Codex 进来不会自动看到协议指针。"
+  warn "建议手动创建 CLAUDE.md 或 AGENTS.md，把这段加上去："
+  echo
+  echo "  $POINTER"
+  echo
+fi
+
+# 5. .gitignore 加工具产物
+GITIGNORE_ENTRIES=(
+  ".playwright-cli/"
+  ".codex-cli/"
+  ".codex/sessions/"
+  ".claude/sessions/"
+)
+
+if [[ ! -f .gitignore ]]; then
+  touch .gitignore
+fi
+
+added=0
+for entry in "${GITIGNORE_ENTRIES[@]}"; do
+  if ! grep -qxF "$entry" .gitignore; then
+    echo "$entry" >> .gitignore
+    added=$((added + 1))
+  fi
+done
+
+if [[ $added -gt 0 ]]; then
+  ok ".gitignore 加了 $added 项工具产物（防止互相污染）"
+else
+  info ".gitignore 已含全部条目，跳过"
+fi
+
+# 6. 提示起 tmux
+echo
+echo "${GREEN}🎉 骨架已就绪。${RESET}"
+echo
+echo "下一步："
+echo
+echo "  ${DIM}# 1. 编辑分工（在 SPEC.md §1 写死谁干啥）${RESET}"
+echo "  \$EDITOR cockpit/SPEC.md"
+echo
+echo "  ${DIM}# 2. 编辑 NOW.md 顶部"大哥看这里"行 + 初始 owner${RESET}"
+echo "  \$EDITOR cockpit/NOW.md"
+echo
+echo "  ${DIM}# 3. 起 tmux session 和分屏${RESET}"
+echo "  tmux new -s $SESSION_NAME -d"
+echo "  tmux split-window -h -t $SESSION_NAME:0"
+echo "  tmux attach -t $SESSION_NAME"
+echo
+echo "  ${DIM}# 4. 在 :0.0 启动 Claude（claude），在 :0.1 启动 Codex（codex 或对应命令）${RESET}"
+echo "  ${DIM}#    两边都让它先 cat cockpit/COORDINATION.md${RESET}"
+echo
+echo "  ${DIM}# 5. commit 骨架${RESET}"
+echo "  git add cockpit/ .gitignore CLAUDE.md AGENTS.md 2>/dev/null"
+echo "  git commit -m 'cockpit: 双 AI 协作骨架（cockpit-coop skill 生成）'"
+echo
