@@ -72,11 +72,7 @@ tmux session = <proj>
 tmux send-keys -t <session>:0.1 '[Claude] done abc123; next=Codex; read cockpit/NOW.md' Enter
 ```
 
-**反模式**：
-```bash
-# ❌ 永远不要这么发
-tmux send-keys -t leyan:0.1 "天气源已切 open-meteo，前端部署完了。后端 weather.py 缓存我写了个 draft，stash 起来导出到 cockpit/weather-cache-draft.patch，麻烦你审完接手。前端调用契约见 cockpit/LOG.md 最新一条..." Enter
-```
+> 反模式参考：见底部「反模式速查」表
 
 ### 铁律 2：每次交接必须更新 NOW.md（不只是 LOG.md）
 
@@ -94,6 +90,8 @@ tmux send-keys -t leyan:0.1 "天气源已切 open-meteo，前端部署完了。�
 
 **漏第 4 步 = 没交接。** 即使代码已 push、LOG 已记，对方进来照样不知道 owner 该自己接了。
 
+> 反模式参考：见底部「反模式速查」表
+
 ### 铁律 3：push 之后才 ping，不 ping 未推状态
 
 **Baseline 失败 #5（场景 B）**：subagent 接活时开工前就 ping"Claude 上线"。开工前没东西交付，ping 是噪音；干完 push 之前 ping，对方 git pull 拉不到。
@@ -102,6 +100,8 @@ tmux send-keys -t leyan:0.1 "天气源已切 open-meteo，前端部署完了。�
 - 开工**不**ping（NOW.md 切 owner 后对方自己看）
 - 干完 + push 后**才** ping
 - 必须打断对方时只发：`[Codex] interrupt? read cockpit/NOW.md`
+
+> 反模式参考：见底部「反模式速查」表
 
 ### 铁律 4：lock_scope 显式写进 NOW.md
 
@@ -121,9 +121,12 @@ tmux send-keys -t leyan:0.1 "天气源已切 open-meteo，前端部署完了。�
 要并行改 → 拆 lock_scope 互不重叠。
 要把活交给对方 → 显式写 owner=对方。
 
+> 反模式参考：见底部「反模式速查」表
+
 ## 检查点速查
 
 ### CP-1: 改 SPEC.md 前先 ack
+**对应铁律**：铁律 4（lock_scope 显式）
 
 **触发**：准备修改 API 契约、数据模型、长期决策或 SPEC.md 任意稳定约定。
 **动作**：1. 在 NOW.md 写 proposed_spec_change + owner；2. tmux 短 ping 要对方 ack；3. 对方 ack 后再改 SPEC.md；4. LOG 记录已改 SPEC §X。
@@ -131,6 +134,7 @@ tmux send-keys -t leyan:0.1 "天气源已切 open-meteo，前端部署完了。�
 **fallback**：对方无响应且非紧急，不改契约；紧急只先写草案到项目临时目录并标明未生效。
 
 ### CP-2: NOW.md 写等大哥验收时先 confirm
+**对应铁律**：铁律 3（push 后才 ping）
 
 **触发**：NOW.md 的 phase / next 写明等待用户验收、确认、拍板或暂停。
 **动作**：1. 停止主动开新任务；2. 汇总当前状态和验证结果；3. 向大哥确认是否继续；4. 得到明确指令后再切 owner / phase。
@@ -138,11 +142,29 @@ tmux send-keys -t leyan:0.1 "天气源已切 open-meteo，前端部署完了。�
 **fallback**：若只是修阻塞性小错，可先提出最小修复方案；没有确认前不扩大范围。
 
 ### CP-3: 冲突 30 分钟无应升级
+**对应铁律**：铁律 1（tmux 只发短 ping）
 
 **触发**：lock_scope、owner、契约解释或交接状态冲突，且对方 30 分钟内无响应。
 **动作**：1. 不继续写冲突范围；2. NOW.md 标记 blocked + 冲突点；3. LOG 记录时间和已尝试 ping；4. 报告大哥请求裁决。
 **话术 / 模板**：`[Codex] blocked=scope conflict; need human; read cockpit/NOW.md`
 **fallback**：只允许继续不重叠 scope 的只读分析或验证；禁止凭猜测改对方范围。
+
+### CP-4: lock_scope 同时占用的先到先得
+**对应铁律**：铁律 4（lock_scope 显式写进 NOW.md）的并发延伸
+
+**触发**：
+- 你打算改 X 文件，发现 NOW.md 上 lock_scope 表里 X 已被对方占
+- 或两个 agent 同时 push commit，commit message 都标了同一个 scope
+
+**动作**：
+1. 看 NOW.md 里那条 lock_scope 的写入时间（`git log -1 cockpit/NOW.md`）
+2. **谁先 commit 进 NOW.md，谁拥有该 scope**；后到方让出，改自己 NOW.md 行 status=`yield to <对方>`
+3. 后到方在 LOG.md 加一条 `[X] yield scope <name> to <对方> (写入早 N 分钟)`
+4. 后到方挑互不重叠的另一 scope 干，或转 idle 等对方 done @ <hash>
+
+**fallback**：
+- 两个 NOW.md commit 时间戳一致 → 字典序靠后的 owner 让
+- 双方都已经动手改了文件 → 后到方 stash 自己改动，等对方 done 后再决定 rebase / 重做
 
 ## 工作流程
 
