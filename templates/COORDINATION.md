@@ -55,6 +55,13 @@ tmux send-keys -t leyan:0.1 "搞完了，前端部署了，后端 draft 在 stas
 6. 改了契约 → **改 `SPEC.md`** + LOG 注一笔"已改 SPEC §X.Y"
 7. tmux 发短 ping
 
+## SPEC.md 改动检查点
+
+- `SPEC.md` 是长期契约，改前必须先让对方 ack。
+- 先在 `NOW.md` 加 `## SPEC change proposal`，写要改什么 + 为什么；ping：`[X] propose SPEC §Y change; read cockpit/NOW.md`。
+- 对方在 `NOW.md` 写 ack / push back 后，才能改 `SPEC.md`。
+- 紧急改字段可先改，但 commit message 标注 `[X] SPEC emergency: ...`，立刻 ping，事后补流程。
+
 ## Lock scope（互不重叠才能并行）
 
 NOW.md 必须有这张表：
@@ -87,6 +94,18 @@ NOW.md 必须有这张表：
 - 不打断对方长任务（看对方 pane 在跑命令就别戳输入框）。
 - 必须打断只发：`[Codex] interrupt? read cockpit/NOW.md`。
 - 状态不一致 → 以 **GitHub main + NOW.md** 为准；LOG.md 只用来追溯。
+
+**30 分钟升级阈值**：
+- interrupt ping 后 30 分钟，对方 pane 仍 idle、`NOW.md` 没动 → 升级到大哥。
+- 主对话报告：`$项目 协作卡住 30min，已 ping 对方无应，等大哥介入`。
+- 不自己解锁 / 不替对方决策 / 不无限等。
+
+## 大哥验收检查点
+
+- `NOW.md` 显示「等大哥验收」时，默认不主动开新工作。
+- 必须私聊大哥报状态：`$项目 当前 N 项目等大哥验收：xxx，要不要继续？`
+- 大哥裁决后，在 `NOW.md` 加 `## 大哥裁决 YYYY-MM-DD HH:MM`，写明决定再开工。
+- 大哥不在线 / 未回 → 继续 idle，不替大哥决定。
 
 ## /compact 处理
 

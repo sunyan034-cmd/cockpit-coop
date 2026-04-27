@@ -121,6 +121,13 @@ tmux send-keys -t leyan:0.1 "天气源已切 open-meteo，前端部署完了。�
 要并行改 → 拆 lock_scope 互不重叠。
 要把活交给对方 → 显式写 owner=对方。
 
+## 检查点：改 SPEC.md 前必须先 ack（防单方面改契约）
+
+- `SPEC.md` 是双方共识的长期契约，单方面改 = 一方说了算
+- 流程：改之前先在 `NOW.md` 加一条 `## SPEC change proposal`，列出要改什么 + 为什么；ping 对方：`[X] propose SPEC §Y change; read cockpit/NOW.md`
+- 对方在 `NOW.md` 写 ack 或 push back 之后，提议方才能动手改 `SPEC.md`
+- 紧急情况（如生产 bug 修复需要立刻改字段）：可以先改，但 commit message 标注 `[X] SPEC emergency: ...` 并立刻 ping，事后补 `NOW.md` 流程
+
 ## 工作流程
 
 ### A. 从零搭一套（首次双 AI 协作）
@@ -160,6 +167,18 @@ cp ~/.claude/skills/cockpit-coop/templates/*.md cockpit/
 - NOW.md owner=自己 → 开干
 - NOW.md owner=对方 → 默认只读，等 ping
 - NOW.md 写"等大哥验收"→ 报告大哥状态，不主动开新工作
+
+**NOW.md 显示「等大哥验收」时**：
+- 默认**不**主动开新工作，但**要**主动给大哥发一行状态报告（私聊不是 tmux）：`$项目 当前 N 项目等大哥验收：xxx，要不要继续？`
+- 大哥说继续 / 拒绝 / 改方向 → 在 `NOW.md` 加一条 `## 大哥裁决 YYYY-MM-DD HH:MM`，写明决定，再开工
+- 大哥不在线 / 未回 → 默认继续 idle，不替大哥决定
+
+## 冲突处理
+
+**30 分钟升级阈值**：
+- tmux 发了 interrupt ping 后 30 分钟，对方 pane 仍 idle、`NOW.md` 没动 → 升级到大哥
+- 升级方式：在主对话窗口告诉大哥：`$项目 协作卡住 30min，已 ping 对方无应，等大哥介入`
+- 不要自己解锁 / 不要替对方做决策 / 不要无限等下去
 
 ## 反模式速查（baseline 直接观察到的）
 
