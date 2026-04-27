@@ -3,98 +3,46 @@ name: cockpit-coordination
 status: active
 ---
 
-# 双 AI 协作协议
+# 双 AI 协作项目配置
 
-> 通用协议，跨项目复用。来源：cockpit-coop skill。
-> 核心：**状态写文件，tmux 只 ping。**
+> 完整协议见 `~/.claude/skills/cockpit-coop/SKILL.md`，本文件只列项目可定制项。
+> 规则变更优先改 skill；本文件只记录本项目差异。
 
-## 文件分工（写错地方 = 协作失效）
+## 角色分工
 
-| 文件 | 写什么 | 不要写什么 |
+| 角色 | Agent / pane | 默认范围 |
 |---|---|---|
-| `SPEC.md` | API 契约 / 数据模型 / 长期决策 | 流水 / 当下进度 |
-| `NOW.md` | 当前 active_owner / lock_scope / phase（覆盖式） | 历史 / 契约 |
-| `LOG.md` | 已发生事实（commit hash / 验证命令）（append-only） | 契约 / 当下任务 |
+| Claude | `<agent/pane>` | `<frontend 或指定目录>` |
+| Codex | `<agent/pane>` | `<backend 或指定目录>` |
+| 其他 | `<可空>` | `<可空>` |
 
-**cockpit/ 只放上面四份协作文档。**patch / draft 数据 / 临时产物 → 放 `drafts/` 或仓库根，cockpit/ 里只指针引用。
+## tmux session
 
-## tmux ping 铁律
+- session 名：`<project-session>`
+- Claude pane：`<session>:0.0`
+- Codex pane：`<session>:0.1`
+- 通知对象：`<按项目实际填写>`
 
-**一行，<80 字符，必带 `read cockpit/NOW.md`，commit + push 之后才发。**
+## lock_scope 命名规则
 
-模板：
+- 默认写相对路径或稳定模块名：`web/`、`services/api/`、`docs/api.yaml`
+- 需要更细时写到文件或接口：`frontend: weather page`、`api: GET /weather`
+- 本项目额外前缀 / 禁用范围：`<可空>`
 
-```text
-[Codex] done e44b9c3; next=Claude; read cockpit/NOW.md
-[Claude] need=schema review; read cockpit/NOW.md
-[Codex] interrupt? read cockpit/NOW.md
-```
+## 特殊例外条款
 
-发命令：
+- `<例外 1：例如某目录只能由一个 agent 改>`
+- `<例外 2：例如某命令只能由 human 执行>`
+- 无例外时写：`无`
 
-```bash
-tmux send-keys -t <session>:0.1 '[Claude] done abc; next=Codex; read cockpit/NOW.md' Enter
-```
+## 本项目常用入口
 
-**绝对不要**：
+- 主要验证命令：`<npm test / pytest / make test>`
+- 部署或发布窗口：`<可空>`
+- 关键外部系统：`<可空>`
 
-```bash
-# ❌ 反模式：长消息塞 send-keys
-tmux send-keys -t leyan:0.1 "搞完了，前端部署了，后端 draft 在 stash 里，契约是 GET /api/x 返回 {y:z}，TTL 10 分钟，你看下..." Enter
-```
+## 维护规则
 
-## 交接动作序列（缺一步 = 没交接）
-
-每次完成一段工作：
-
-1. 写代码 / 跑测试
-2. `git diff --cached` 看清楚（不带对方脏文件）
-3. `git commit + push`
-4. **更新 `NOW.md`**：active_owner 切对方 / phase / lock_scope
-5. **append `LOG.md`** 一条事实（commit hash + 验证命令）
-6. 改了契约 → **改 `SPEC.md`** + LOG 注一笔"已改 SPEC §X.Y"
-7. tmux 发短 ping
-
-## Lock scope（互不重叠才能并行）
-
-NOW.md 必须有这张表：
-
-| Owner | Scope | 状态 |
-|---|---|---|
-| Claude | `web/` 前端 | done @ <hash> / in_progress |
-| Codex | `services/api/` 后端 | next / in_progress |
-
-要并行改 → 拆成不重叠的 scope。
-要把活交给对方 → owner 切对方。
-
-## Worktree 纪律
-
-- 同时只一个 active owner，另一个默认只读。
-- 不碰对方未提交脏文件。
-- `.playwright-cli/`、`.codex-cli/` 之类工具产物**必须**加 .gitignore（首次发现立刻加）。
-- 并行多了改用两个 worktree：`<repo>-claude` / `<repo>-codex`。
-
-## Commit 边界
-
-- 一阶段一 commit。
-- commit message 头注 owner + 范围：`[Claude] M3 brief 截断按句号`。
-- 提交前 `git diff --cached` 看清楚。
-- 跑完相关测试再 commit；测试命令写进 LOG.md。
-- **push 之后再 ping**，不 ping 未推状态。
-
-## 冲突处理
-
-- 不打断对方长任务（看对方 pane 在跑命令就别戳输入框）。
-- 必须打断只发：`[Codex] interrupt? read cockpit/NOW.md`。
-- 状态不一致 → 以 **GitHub main + NOW.md** 为准；LOG.md 只用来追溯。
-
-## /compact 处理
-
-各自 compact 不影响对方。compact 后回来：
-
-```bash
-cat cockpit/NOW.md
-tail -50 cockpit/LOG.md
-```
-
-即可恢复状态。
+- 本文件只写项目差异，不复制通用协议。
+- 通用协议变化时，改 `~/.claude/skills/cockpit-coop/SKILL.md`。
+- 新 agent 首次进入先读本文件，再回到 `SKILL.md` 查完整规则。

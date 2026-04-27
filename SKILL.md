@@ -121,6 +121,29 @@ tmux send-keys -t leyan:0.1 "天气源已切 open-meteo，前端部署完了。�
 要并行改 → 拆 lock_scope 互不重叠。
 要把活交给对方 → 显式写 owner=对方。
 
+## 检查点速查
+
+### CP-1: 改 SPEC.md 前先 ack
+
+**触发**：准备修改 API 契约、数据模型、长期决策或 SPEC.md 任意稳定约定。
+**动作**：1. 在 NOW.md 写 proposed_spec_change + owner；2. tmux 短 ping 要对方 ack；3. 对方 ack 后再改 SPEC.md；4. LOG 记录已改 SPEC §X。
+**话术 / 模板**：`[Codex] need=SPEC ack §2.1; read cockpit/NOW.md`
+**fallback**：对方无响应且非紧急，不改契约；紧急只先写草案到项目临时目录并标明未生效。
+
+### CP-2: NOW.md 写等大哥验收时先 confirm
+
+**触发**：NOW.md 的 phase / next 写明等待用户验收、确认、拍板或暂停。
+**动作**：1. 停止主动开新任务；2. 汇总当前状态和验证结果；3. 向大哥确认是否继续；4. 得到明确指令后再切 owner / phase。
+**话术 / 模板**：`[Claude] waiting=user confirm; read cockpit/NOW.md`
+**fallback**：若只是修阻塞性小错，可先提出最小修复方案；没有确认前不扩大范围。
+
+### CP-3: 冲突 30 分钟无应升级
+
+**触发**：lock_scope、owner、契约解释或交接状态冲突，且对方 30 分钟内无响应。
+**动作**：1. 不继续写冲突范围；2. NOW.md 标记 blocked + 冲突点；3. LOG 记录时间和已尝试 ping；4. 报告大哥请求裁决。
+**话术 / 模板**：`[Codex] blocked=scope conflict; need human; read cockpit/NOW.md`
+**fallback**：只允许继续不重叠 scope 的只读分析或验证；禁止凭猜测改对方范围。
+
 ## 工作流程
 
 ### A. 从零搭一套（首次双 AI 协作）
