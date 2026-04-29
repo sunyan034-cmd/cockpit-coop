@@ -14,14 +14,31 @@ status: active
 |---|---|---|
 | Claude | `<agent/pane>` | `<frontend 或指定目录>` |
 | Codex | `<agent/pane>` | `<backend 或指定目录>` |
+| Hermes / 调度员（可选）| `<session>:0.2` 或同项目任意第三 pane | 只读巡检 / 翻译 / 调度 / ping；**不改业务代码**，必要时只最小更新 `cockpit/NOW.md` / `LOG.md` 并在 LOG 注 `[Hermes]` |
 | 其他 | `<可空>` | `<可空>` |
+
+> **协作正源只有 `cockpit/` 一份**：Hermes 不准建 `hermes/` / `dispatch/` 等平行状态目录；SPEC.md 不许 Hermes 单方面改（沿用 CP-1）。
 
 ## tmux session
 
 - session 名：`<project-session>`
 - Claude pane：`<session>:0.0`
 - Codex pane：`<session>:0.1`
+- Hermes pane（可选）：同 session 内 `tmux split-window` 起的第三 pane；**编号不固定**，按 `pane_current_path` + 项目名定位（见下）
 - 通知对象：`<按项目实际填写>`
+
+## Hermes 定位规则（模糊项目名也能找到目标 pane）
+
+大哥喊"调度 image" / "翻译 Codex" / "巡检项目"时，Hermes 不依赖固定 pane 编号：
+
+```bash
+PROJ_PATH=$(pwd)   # Hermes 启动时所在的项目目录
+tmux list-panes -a -F \
+  "#{session_name}:#{window_index}.#{pane_index} #{pane_current_command} #{pane_current_path}" \
+  | awk -v p="$PROJ_PATH" '$3==p'
+```
+
+只要工作目录匹配（或项目名是路径子串），就能锁定 Claude / Codex 所在 pane，再按铁律 1 发 `[Hermes] ...` 短 ping。
 
 ## lock_scope 命名规则
 

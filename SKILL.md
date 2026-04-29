@@ -1,6 +1,6 @@
 ---
 name: cockpit-coop
-description: Use when two AI agents (Claude + Codex / Claude + Gemini / Claude + Claude) work in the same tmux session on the same repo, or when entering a project that already has cockpit/COORDINATION.md. Triggers include "和 codex 一起做"、"开两个 pane 协作"、"双 AI 分工"、"让另一个 AI 帮忙"、"两个 agent 同时干"。
+description: Use when two AI agents (Claude + Codex / Claude + Gemini / Claude + Claude) work in the same tmux session on the same repo, or when entering a project that already has cockpit/COORDINATION.md. Triggers include "和 codex 一起做"、"开两个 pane 协作"、"双 AI 分工"、"让另一个 AI 帮忙"、"两个 agent 同时干"、"调度 image"、"翻译 Codex"、"巡检项目"、"Hermes 上线"。
 ---
 
 # cockpit-coop — 双 AI 在同一 tmux 协作协议
@@ -8,6 +8,8 @@ description: Use when two AI agents (Claude + Codex / Claude + Gemini / Claude +
 ## Overview
 
 两个 AI 在同一个 tmux session 里改同一份代码会踩六个高频坑（4 + 2 实战补）。本 skill 用 cockpit/ 目录承载状态，让 tmux 只做敲门通知。
+
+可选再加一个 Hermes / 调度员当第三方调度+翻译层（详见下方「Hermes / 调度员」一节），但**协作正源仍然只有 `cockpit/` 一份**，不引入第二套状态目录。
 
 **核心一句话：状态写文件，tmux 只 ping。**
 
@@ -28,10 +30,73 @@ description: Use when two AI agents (Claude + Codex / Claude + Gemini / Claude +
 ```
 tmux session = <proj>
 ├── pane :0.0  → Claude (本 agent)
-└── pane :0.1  → 另一个 AI（Codex 等）
+├── pane :0.1  → 另一个 AI（Codex 等）
+└── pane :0.2  → Hermes / 调度员（可选第三方调度层）
 ```
 
-两个 pane 同一工作目录，看同一份代码。
+前两个 pane 同一工作目录，看同一份代码。第三 pane 给 Hermes 当调度位，可有可无；没起也不影响 Claude×Codex 协议。
+
+## Hermes / 调度员（可选第三方调度/翻译层）
+
+**一句话**：Hermes 是大哥的"翻译官 + 巡检员"，不是第三个干活的 agent。
+
+**职责**（只读 + 翻译为主）：
+
+1. 读 `cockpit/`（NOW/LOG/SPEC/COORDINATION）拿到协作正源
+2. `tmux capture-pane` / `tmux list-panes` 看 Claude、Codex 各自 pane 状态
+3. `git log --oneline` / `git status` 看仓库实际推进
+4. 把上面三路信号**翻译成大哥能秒懂的人话**（"Codex 还在跑测试，Claude idle 等审查"）
+5. 判断**下一步 owner 应该是谁**，必要时按铁律 1 给目标 pane 发**一行短 ping**（含动词 + `read cockpit/NOW.md`）
+
+**边界（红线，不要越）**：
+
+- ❌ **默认不改业务代码**——Hermes 不抢 Claude/Codex 的活，不写 feature、不修 bug、不跑 deploy
+- ❌ **不另开第二套状态目录**——项目协作正源**只有 `cockpit/`**，Hermes 不准建 `hermes/`、`dispatch/`、`schedule/` 等平行目录
+- ✅ **只在明确调度需要时**最小更新 `cockpit/NOW.md` / `cockpit/LOG.md`：
+  - 例：大哥口头说"暂停 M7"，Claude 不在线，Hermes 可以代为把"已暂停 M7 @<时间> by 大哥（Hermes 代记）"写进 NOW.md + LOG.md，再 ping Codex
+  - 例：发现 NOW.md 滞后于 git 实际状态（owner 写错），Hermes 可以最小修正一行并在 LOG.md 注 `[Hermes] 修正 NOW.md owner @<hash>`
+- ✅ **改了 cockpit/ 必须 commit + 在 LOG.md 注明 [Hermes]**，让 Claude/Codex 下一轮能看见
+- ✅ **SPEC.md 不许 Hermes 单方面改**（沿用 CP-1：契约改动必须 Claude/Codex 之间 ack）
+
+**Ping 规范**（沿用铁律 1，前缀换成 `[Hermes]`）：
+
+```
+[Hermes] 大哥拍暂停 M7c @<hash> read cockpit/NOW.md
+[Hermes] Codex 已 done @<hash> next=Claude read cockpit/NOW.md
+[Hermes] NOW.md owner 已修正 read cockpit/NOW.md
+```
+
+发送方式同铁律 1（`set-buffer → paste-buffer → sleep 1 → C-m → sleep 1.5 → capture-pane 验证`），不再重复。
+
+### 同 tmux 第三 pane 用法
+
+大哥在已有的 `<proj>` session 里再开一个 pane 跑 Hermes：
+
+```bash
+tmux split-window -v -t <proj>:0    # 或 -h，按屏幕布局来
+# 在新 pane 里启动 Hermes（你用的 CLI / agent）
+```
+
+Hermes 不依赖固定的 pane 编号（`:0.2` 只是默认建议），它**按 `pane_current_path` + 项目名定位**：
+
+```bash
+# Hermes 自检：找到所有跟自己同项目的 pane
+PROJ_PATH=$(pwd)                         # Hermes 自己启动时的工作目录
+tmux list-panes -a -F \
+  "#{session_name}:#{window_index}.#{pane_index} #{pane_current_command} #{pane_current_path}" \
+  | awk -v p="$PROJ_PATH" '$3==p'        # 同项目路径的 pane 全列出来
+```
+
+大哥喊话场景：
+
+| 大哥说 | Hermes 做 |
+|---|---|
+| "调度 image"、"调度 leyan-image" | 按项目名 / 路径定位到目标 session，读 cockpit/，汇报 owner + 下一步 |
+| "翻译 Codex"、"Codex 在干嘛" | `tmux capture-pane` Codex pane + `git log` + 读 NOW.md，输出人话总结 |
+| "巡检项目"、"巡检一下" | 遍历多个项目 cockpit/NOW.md，列出每个项目的 owner / phase / 卡点 |
+| "替我盯 5 分钟" | 按铁律 5 主动轮询（`git log` + `pane_current_command`），有异常立刻汇报，不主动 ping 对方 |
+
+**冲突处理**：如果 Hermes 想动 cockpit/ 时 Claude 也在动，按 CP-4 先到先得（看 `git log -1 cockpit/NOW.md` 谁先 commit），Hermes 默认让位——它是调度层，不该跟 owner 抢写。
 
 ## cockpit/ 文件分工（baseline 测试发现 agent 会写错地方）
 

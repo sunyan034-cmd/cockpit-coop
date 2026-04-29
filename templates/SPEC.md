@@ -15,8 +15,10 @@ status: draft
 |---|---|---|
 | Claude | `<session>:0.0` | 例：方案 + 前端 |
 | Codex | `<session>:0.1` | 例：审方案 + 后端 |
+| Hermes / 调度员（可选）| `<session>:0.2`（按 `pane_current_path` 定位，编号不固定）| 只读巡检 / 翻译 / 调度 / ping；**默认不改业务代码**，必要时只最小更新 `cockpit/NOW.md` / `LOG.md` |
 
 **按项目调整，但一定在这里写死，避免互抢活。**
+**协作正源只有 `cockpit/` 一份**，Hermes 不另开 `hermes/` / `dispatch/` 等平行目录；SPEC.md 不许 Hermes 单方面改（CP-1）。
 
 ## 2. 数据模型 / API 契约
 

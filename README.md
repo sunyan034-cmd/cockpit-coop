@@ -12,6 +12,8 @@
 
 不依赖任何 SDK，只要两个 agent 都能读写文件 + 看 tmux pane，协议就成立。
 
+可选再起第三 pane 跑 **Hermes / 调度员** 当翻译层：读 `cockpit/`、看 tmux、看 git，把状态翻译给大哥并判断下一步 owner。Hermes **不另开状态目录**，正源仍是 `cockpit/`；默认不动业务代码，必要时只最小更新 `cockpit/NOW.md` / `LOG.md`。详见 [SKILL.md](./SKILL.md) 「Hermes / 调度员」一节。
+
 ## 依赖
 
 **必需**：
@@ -73,6 +75,8 @@ tmux attach -t myproj
 在 `:0.0` 启动 Claude（`claude`），在 `:0.1` 启动 Codex（`codex`）。
 
 第一句让两个 agent 都先读 `cockpit/COORDINATION.md` 了解协议。
+
+需要调度员就再 `tmux split-window -v -t myproj:0` 起第三 pane 跑 Hermes，喊"调度 image / 翻译 Codex / 巡检项目"。Hermes 按 `pane_current_path` + 项目名定位，不抢 Claude/Codex 的活。
 
 ### 方式 3：直接对 Claude 说
 
