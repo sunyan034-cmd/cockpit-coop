@@ -79,28 +79,33 @@ tmux session = <proj>
 
 ⚠️ **禁用模糊 ping**：`read NOW.md`、`方向变了`、`看一下`、`同步一下` —— 对方收到无动词的 ping 会回 NOW.md 找指令，NOW.md 滞后于人类口头指令时对方就保守地停下来 idle。**ping 必须含动作，不能只是文档指针**。
 
-发命令（Codex CLI v0.125+ TUI 必须用 paste-buffer + C-m）：
+发命令（Codex CLI v0.125+ TUI 必须用 paste-buffer + C-m + **capture-pane 验证**）：
 
 ```bash
-# 推荐：paste-buffer + C-m
-tmux set-buffer "[Claude] 开干 M7a @abc123 read NOW.md" \
-  && tmux paste-buffer -t <session>:0.1 \
-  && tmux send-keys -t <session>:0.1 C-m
+# 完整 SOP：set-buffer → paste-buffer → sleep 1 → C-m → sleep 1.5 → 验证
+P=<session>:0.1   # 或按 path 找：P=$(tmux list-panes -a -F "#{pane_id} #{pane_current_command} #{pane_current_path}" | awk '$2=="node" && $3=="<repo path>" {print $1; exit}')
+tmux set-buffer "[Claude] 开干 M7a @abc123 read NOW.md"
+tmux paste-buffer -t $P
+sleep 1                                              # 关键 1：给 paste 异步落地时间
+tmux send-keys -t $P C-m
+sleep 1.5                                            # 关键 2：给 Codex 处理时间
+tmux capture-pane -p -t $P | tail -8 | grep -q "Working\|esc to interrupt" \
+  && echo "✅ Codex Working" \
+  || { echo "⚠️ ping 未提交，救场连发"; \
+       for K in C-m Enter C-j C-m; do tmux send-keys -t $P $K; sleep 0.3; done; \
+       sleep 1.5; tmux capture-pane -p -t $P | tail -5; }
 ```
 
-⚠️ **不要用** `tmux send-keys -t <session>:0.1 '...' Enter` —— Codex CLI TUI 用 raw mode 监听具体 keycode，Enter 别名映射 LF (`\n`)，Codex 只认 CR (`\r`)，`C-m` 才是真正的 `\r`。普通 zsh/bash shell 不受影响（readline 接受 LF）。
+🔥 **铁律：没看到 capture-pane 输出含 "Working" 或 "esc to interrupt" 字样，绝不报"已 ping"** —— 盲报成功 = 让人类目测背锅 = 一直会被骂同样的问题。
 
-**长 ping 卡输入框救场**（消息 paste 进去但 C-m 没触发提交时）：
-
-```bash
-tmux send-keys -t <session>:0.1 C-m
-tmux send-keys -t <session>:0.1 -l $'\r'
-tmux send-keys -t <session>:0.1 Enter
-tmux send-keys -t <session>:0.1 C-j
-# 总有一种或组合能触发提交。但更好的做法是别发长 ping——保持 <80 字符单行。
-```
+⚠️ **三个常踩的坑**：
+1. **不要用** `tmux send-keys -t $P '...' Enter` —— Codex CLI TUI 用 raw mode 监听具体 keycode，Enter 别名映射 LF (`\n`)，Codex 只认 CR (`\r`)，`C-m` 才是真正的 `\r`。普通 zsh/bash shell 不受影响（readline 接受 LF）。
+2. **paste-buffer 是异步的** —— 紧跟着 send-keys C-m 时 paste 还没落地，C-m 就被忽略。**sleep 1 是必需的不是优化**。
+3. **C-m 之后也要 sleep + capture 验证** —— Codex 处理 keystroke 有延迟，立刻 capture 可能还看到老画面，至少 sleep 1.5 再 capture。
 
 **清空对方输入框**用 `C-u`（行删除，不会中断 Codex）；**不要**用 `C-c`（会被 TUI 当 SIGINT 中断对方任务）。
+
+**保持 ping <80 字符 单行** —— 长 ping 即使提交了也容易被 Codex TUI 当成行内换行处理；长说明全部塞 `cockpit/NOW.md`。
 
 > 反模式参考：见底部「反模式速查」表
 
